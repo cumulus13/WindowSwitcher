@@ -1,0 +1,19 @@
+# Window Switcher Configuration
+
+[general]
+# Show window icons (true/false)
+show_icons = true
+
+# Maximum number of windows to show in list
+max_list_show = 50
+
+# Enable dark theme (true/false)
+dark_theme = true
+
+[hotkey]
+# Hotkey modifier: Alt, Control, Shift, Windows
+modifier = "Alt"
+
+# Hotkey key: Space, Tab, etc.
+# Common keys: Space, Tab, Enter, F1-F12, A-Z, D0-D9
+key = "Space"

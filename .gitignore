@@ -1,0 +1,27 @@
+# PT backup directory
+.pt/
+
+# Added entries (14 items)
+obj/
+bin/
+app_128.ico
+app_16.ico
+app_20.ico
+app_24.ico
+app_256.ico
+app_32.ico
+app_40.ico
+app_48.ico
+app_512.ico
+app_64.ico
+app_72.ico
+app_96.ico
+
+# Added entries (1 items)
+combine.txt
+
+# Added entries (1 items)
+*sublime*
+
+# Added entries (1 items)
+*.exe
