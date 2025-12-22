@@ -101,7 +101,7 @@
                                 <TextBlock Text="{Binding Title}" 
                                          FontSize="14"
                                          FontWeight="SemiBold"
-                                         Foreground="#00B800"
+                                         Foreground="#00AAFF"
                                          TextTrimming="CharacterEllipsis"/>
                                 <TextBlock Text="{Binding ProcessName}" 
                                          FontSize="11"
