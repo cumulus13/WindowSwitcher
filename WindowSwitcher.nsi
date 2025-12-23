@@ -28,7 +28,7 @@ RequestExecutionLevel admin
 
 ; Pages
 !insertmacro MUI_PAGE_WELCOME
-!insertmacro MUI_PAGE_LICENSE "LICENSE"
+; LICENSE PAGE REMOVED - No LICENSE file needed
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
 !define MUI_FINISHPAGE_RUN "$INSTDIR\WindowSwitcher.exe"
