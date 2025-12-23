@@ -44,6 +44,16 @@ jobs:
             --self-contained false `
             -o ./publish/framework-dependent
       
+      # Install NSIS
+      - name: 📦 Install NSIS
+        run: |
+          choco install nsis -y
+          
+      # Build NSIS Installer
+      - name: 🔨 Build NSIS Installer
+        run: |
+          & "C:\Program Files (x86)\NSIS\makensis.exe" /V4 WindowSwitcher.nsi
+      
       - name: 📦 Zip Single File Version
         run: |
           Compress-Archive -Path ./publish/single-file/* -DestinationPath ./WindowSwitcher-SingleFile-win-x64.zip
@@ -64,6 +74,12 @@ jobs:
           name: WindowSwitcher-FrameworkDependent-win-x64
           path: ./publish/framework-dependent/
       
+      - name: 📤 Upload NSIS Installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: WindowSwitcher-Setup
+          path: ./WindowSwitcher-Setup-*.exe
+      
       - name: 🚀 Create Release (if tagged)
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
@@ -71,18 +87,21 @@ jobs:
           files: |
             ./WindowSwitcher-SingleFile-win-x64.zip
             ./WindowSwitcher-FrameworkDependent-win-x64.zip
+            ./WindowSwitcher-Setup-*.exe
           generate_release_notes: true
           body: |
             ## 📦 Download Options
             
             **WindowSwitcher-SingleFile-win-x64.zip** (Recommended)
-            - ✅ Single .exe file (~80-100 MB)
+            - ✅ Single .exe file (~50-100 MB)
             - ✅ No .NET runtime needed
             - ✅ Just extract and run
             
             **WindowSwitcher-FrameworkDependent-win-x64.zip** (Smaller)
-            - ✅ Smaller size (~5-10 MB)
+            - ✅ Smaller size (~0.5-2 MB)
             - ⚠️ Requires .NET 8 Runtime installed
-            - 📥 [Download .NET 8 Runtime](https://dotnet.microsoft.com/download/dotnet/8.0)
+            - 📥 [Download .NET 8 Runtime x64](https://download.visualstudio.microsoft.com/download/pr/836cce68-d7d4-4027-955a-bab6d921d68c/24ec3a2df6785b128a9bbde2faeeed1e/dotnet-runtime-8.0.3-win-x64.exe)
+            - 📥 [Download .NET 8 Runtime x86](https://download.visualstudio.microsoft.com/download/pr/f0a786df-9956-481b-b5f3-b054b2edd294/af3c7af3d4444ace418c6f73b7264ea6/dotnet-runtime-8.0.3-win-x86.exe)
+            - 📥 [Download .NET 8 Runtime Arm64](https://download.visualstudio.microsoft.com/download/pr/396e641a-fb6a-4e1f-9028-1e1274f375e9/c4a22ce780b33120f118088ee448c318/dotnet-runtime-8.0.3-win-arm64.exe)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
