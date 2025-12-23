@@ -2,6 +2,16 @@
 
 Fast, lightweight window switching utility for Windows with keyboard-driven navigation.
 
+## 🎦 Demo
+
+<div align="center">
+  <a href="https://youtu.be/H2wqDc4WVy8">
+    <img src="https://raw.githubusercontent.com/cumulus13/windowswitcher/master/screenshot.png" alt="How to use mks - tree2 -pt" style="width:100%;">
+  </a>
+  <br>
+  <a href="https://youtu.be/H2wqDc4WVy8">Demo</a>
+</div>
+
 ## Features
 
 - 🚀 **Fast window search** - Real-time filtering as you type
