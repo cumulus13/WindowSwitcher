@@ -28,7 +28,6 @@ RequestExecutionLevel admin
 
 ; Pages
 !insertmacro MUI_PAGE_WELCOME
-; LICENSE PAGE REMOVED - No LICENSE file needed
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
 !define MUI_FINISHPAGE_RUN "$INSTDIR\WindowSwitcher.exe"
@@ -62,38 +61,28 @@ FunctionEnd
 Function CheckDotNetRuntime
   DetailPrint "Checking for .NET ${DOTNET_VERSION} Runtime..."
   
-  ; Check registry for .NET 8 Runtime
+  ; Simple check: just look for registry key existence
   ClearErrors
   ${If} ${RunningX64}
-    ; Check 64-bit registry
     ReadRegStr $0 HKLM "SOFTWARE\dotnet\Setup\InstalledVersions\x64\sharedhost" "Version"
   ${Else}
-    ; Check 32-bit registry
     ReadRegStr $0 HKLM "SOFTWARE\dotnet\Setup\InstalledVersions\x86\sharedhost" "Version"
   ${EndIf}
   
   ${If} ${Errors}
-    ; Not found - try alternative location
+    ; Try alternative registry location
     ClearErrors
-    ReadRegStr $0 HKLM "SOFTWARE\dotnet\Setup\InstalledVersions\x64\sharedfx\Microsoft.NETCore.App" "8.0"
-    
+    EnumRegKey $0 HKLM "SOFTWARE\dotnet\Setup\InstalledVersions\x64\sharedfx\Microsoft.NETCore.App" 0
     ${If} ${Errors}
       DetailPrint ".NET ${DOTNET_VERSION} Runtime not found"
       StrCpy $DotNetInstalled "0"
     ${Else}
-      DetailPrint ".NET ${DOTNET_VERSION} Runtime found: $0"
+      DetailPrint ".NET Runtime found"
       StrCpy $DotNetInstalled "1"
     ${EndIf}
   ${Else}
-    ; Check if version is 8.0 or higher
-    ${VersionCompare} "$0" "8.0.0" $R0
-    ${If} $R0 == 2
-      DetailPrint ".NET version $0 is older than 8.0"
-      StrCpy $DotNetInstalled "0"
-    ${Else}
-      DetailPrint ".NET ${DOTNET_VERSION} Runtime found: $0"
-      StrCpy $DotNetInstalled "1"
-    ${EndIf}
+    DetailPrint ".NET Runtime found: $0"
+    StrCpy $DotNetInstalled "1"
   ${EndIf}
 FunctionEnd
 
