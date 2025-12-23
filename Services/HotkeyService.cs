@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Input;
@@ -9,10 +10,9 @@ namespace WindowSwitcher.Services;
 
 public class HotkeyService : IDisposable
 {
-    private const int HOTKEY_ID = 9000;
     private readonly Window _window;
     private HwndSource? _source;
-    private Action? _hotkeyAction;
+    private readonly Dictionary<int, Action> _hotkeyActions = new();
     private bool _disposed;
 
     public HotkeyService(Window window)
@@ -20,9 +20,9 @@ public class HotkeyService : IDisposable
         _window = window;
     }
 
-    public void RegisterHotkey(ModifierKeys modifiers, Key key, Action action)
+    public void RegisterHotkey(ModifierKeys modifiers, Key key, Action action, int hotkeyId)
     {
-        _hotkeyAction = action;
+        _hotkeyActions[hotkeyId] = action;
 
         var helper = new WindowInteropHelper(_window);
         
@@ -32,20 +32,23 @@ public class HotkeyService : IDisposable
             helper.EnsureHandle();
         }
         
-        _source = HwndSource.FromHwnd(helper.Handle);
-        _source?.AddHook(HwndHook);
+        if (_source == null)
+        {
+            _source = HwndSource.FromHwnd(helper.Handle);
+            _source?.AddHook(HwndHook);
+        }
 
         uint modifierFlags = GetModifierFlags(modifiers);
         uint vkCode = (uint)KeyInterop.VirtualKeyFromKey(key);
 
-        if (!NativeMethods.RegisterHotKey(helper.Handle, HOTKEY_ID, modifierFlags, vkCode))
+        if (!NativeMethods.RegisterHotKey(helper.Handle, hotkeyId, modifierFlags, vkCode))
         {
             int errorCode = Marshal.GetLastWin32Error();
             string modifierName = modifiers.ToString();
             string keyName = key.ToString();
             
             throw new InvalidOperationException(
-                $"Failed to register hotkey {modifierName}+{keyName}. " +
+                $"Failed to register hotkey {modifierName}+{keyName} (ID: {hotkeyId}). " +
                 $"Error code: {errorCode}. " +
                 "The hotkey might already be in use by another application. " +
                 "Please change the hotkey in config.toml and restart the application.");
@@ -68,10 +71,14 @@ public class HotkeyService : IDisposable
 
     private IntPtr HwndHook(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
-        if (msg == NativeMethods.WM_HOTKEY && wParam.ToInt32() == HOTKEY_ID)
+        if (msg == NativeMethods.WM_HOTKEY)
         {
-            _hotkeyAction?.Invoke();
-            handled = true;
+            int hotkeyId = wParam.ToInt32();
+            if (_hotkeyActions.TryGetValue(hotkeyId, out var action))
+            {
+                action?.Invoke();
+                handled = true;
+            }
         }
         return IntPtr.Zero;
     }
@@ -82,8 +89,13 @@ public class HotkeyService : IDisposable
             return;
 
         var helper = new WindowInteropHelper(_window);
-        NativeMethods.UnregisterHotKey(helper.Handle, HOTKEY_ID);
+        foreach (var hotkeyId in _hotkeyActions.Keys)
+        {
+            NativeMethods.UnregisterHotKey(helper.Handle, hotkeyId);
+        }
+        
         _source?.RemoveHook(HwndHook);
+        _hotkeyActions.Clear();
         _disposed = true;
     }
 }

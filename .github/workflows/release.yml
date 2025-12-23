@@ -1,35 +1,31 @@
 name: Build & Publish
-
 on:
   push:
     branches: [ master ]
     tags: [ 'v*.*.*' ]  
   pull_request:
     branches: [ master ]
-
 permissions:
   contents: write
   packages: write
-
-
 jobs:
   build:
     name: Build Windows x64
     runs-on: windows-latest
-
     steps:
       - name: 📥 Checkout code
         uses: actions/checkout@v4
-
+      
       - name: ⚙️ Setup .NET 8 SDK
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
-
+      
       - name: 🧪 Restore dependencies
         run: dotnet restore
-
-      - name: 🔨 Build & Publish (Release)
+      
+      # VERSION 1: Single File (self-contained, single exe)
+      - name: 🔨 Build & Publish (Single File)
         run: |
           dotnet publish WindowSwitcher.csproj `
             -c Release `
@@ -37,19 +33,56 @@ jobs:
             --self-contained true `
             -p:PublishSingleFile=true `
             -p:IncludeNativeLibrariesForSelfExtract=true `
-            -o ./publish
-
-      - name: 📤 Upload build artifact
+            -o ./publish/single-file
+      
+      # VERSION 2: Framework Dependent (smaller, needs .NET runtime)
+      - name: 🔨 Build & Publish (Framework Dependent)
+        run: |
+          dotnet publish WindowSwitcher.csproj `
+            -c Release `
+            -r win-x64 `
+            --self-contained false `
+            -o ./publish/framework-dependent
+      
+      - name: 📦 Zip Single File Version
+        run: |
+          Compress-Archive -Path ./publish/single-file/* -DestinationPath ./WindowSwitcher-SingleFile-win-x64.zip
+      
+      - name: 📦 Zip Framework Dependent Version
+        run: |
+          Compress-Archive -Path ./publish/framework-dependent/* -DestinationPath ./WindowSwitcher-FrameworkDependent-win-x64.zip
+      
+      - name: 📤 Upload Single File artifact
         uses: actions/upload-artifact@v4
         with:
-          name: WindowSwitcher-win-x64
-          path: ./publish/
-
+          name: WindowSwitcher-SingleFile-win-x64
+          path: ./publish/single-file/
+      
+      - name: 📤 Upload Framework Dependent artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: WindowSwitcher-FrameworkDependent-win-x64
+          path: ./publish/framework-dependent/
+      
       - name: 🚀 Create Release (if tagged)
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: ./publish/WindowSwitcher.exe
+          files: |
+            ./WindowSwitcher-SingleFile-win-x64.zip
+            ./WindowSwitcher-FrameworkDependent-win-x64.zip
           generate_release_notes: true
+          body: |
+            ## 📦 Download Options
+            
+            **WindowSwitcher-SingleFile-win-x64.zip** (Recommended)
+            - ✅ Single .exe file (~80-100 MB)
+            - ✅ No .NET runtime needed
+            - ✅ Just extract and run
+            
+            **WindowSwitcher-FrameworkDependent-win-x64.zip** (Smaller)
+            - ✅ Smaller size (~5-10 MB)
+            - ⚠️ Requires .NET 8 Runtime installed
+            - 📥 [Download .NET 8 Runtime](https://dotnet.microsoft.com/download/dotnet/8.0)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

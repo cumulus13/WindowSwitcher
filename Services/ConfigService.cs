@@ -20,15 +20,19 @@ show_icons = true
 max_list_show = 50
 
 # Enable dark theme (true/false)
-dark_theme = false
+dark_theme = true
+
+# Follow cursor to monitor (true) or always use primary monitor (false)
+follow_cursor = true
 
 [hotkey]
-# Hotkey modifier: Alt, Control, Shift, Windows
+# Main hotkey to show/hide window switcher
 modifier = ""Alt""
-
-# Hotkey key: Space, Tab, etc.
-# Common keys: Space, Tab, Enter, F1-F12, A-Z, D0-D9
 key = ""Space""
+
+# Toggle display mode hotkey (follow cursor vs primary monitor)
+toggle_mode_modifier = ""Alt+Shift""
+toggle_mode_key = ""M""
 ";
 
     public ConfigService()
@@ -56,98 +60,32 @@ key = ""Space""
             // Load general settings
             if (model.TryGetValue("general", out var generalObj) && generalObj is TomlTable general)
             {
-                // Try to parse show_icons
-                try
-                {
-                    if (general.TryGetValue("show_icons", out var showIcons))
-                    {
-                        settings.ShowIcons = showIcons switch
-                        {
-                            bool b => b,
-                            string s => bool.Parse(s),
-                            long l => l != 0,
-                            _ => true
-                        };
-                    }
-                }
-                catch
-                {
-                    settings.ShowIcons = true; // Use default on error
-                }
-
-                // Try to parse max_list_show
-                try
-                {
-                    if (general.TryGetValue("max_list_show", out var maxList))
-                    {
-                        settings.MaxListShow = maxList switch
-                        {
-                            int i => i,
-                            long l => (int)l,
-                            string s => int.Parse(s),
-                            _ => 50
-                        };
-                    }
-                }
-                catch
-                {
-                    settings.MaxListShow = 50; // Use default on error
-                }
-
-                // Try to parse dark_theme
-                try
-                {
-                    if (general.TryGetValue("dark_theme", out var darkTheme))
-                    {
-                        settings.DarkTheme = darkTheme switch
-                        {
-                            bool b => b,
-                            string s => bool.Parse(s),
-                            long l => l != 0,
-                            _ => false
-                        };
-                    }
-                }
-                catch
-                {
-                    settings.DarkTheme = false; // Use default on error
-                }
+                settings.ShowIcons = ParseBool(general, "show_icons", true);
+                settings.MaxListShow = ParseInt(general, "max_list_show", 50);
+                settings.DarkTheme = ParseBool(general, "dark_theme", true);
+                settings.FollowCursor = ParseBool(general, "follow_cursor", true);
             }
 
             // Load hotkey settings
             if (model.TryGetValue("hotkey", out var hotkeyObj) && hotkeyObj is TomlTable hotkey)
             {
-                // Try to parse modifier
-                try
-                {
-                    if (hotkey.TryGetValue("modifier", out var modifier))
-                    {
-                        string modStr = modifier?.ToString() ?? "Alt";
-                        settings.HotkeyModifierString = modStr;
-                        settings.HotkeyModifier = ParseModifier(modStr);
-                    }
-                }
-                catch
-                {
-                    settings.HotkeyModifier = ModifierKeys.Alt; // Use default on error
-                    settings.HotkeyModifierString = "Alt";
-                }
-
-                // Try to parse key
-                try
-                {
-                    if (hotkey.TryGetValue("key", out var key))
-                    {
-                        string keyStr = key?.ToString() ?? "Space";
-                        settings.HotkeyKeyString = keyStr;
-                        settings.HotkeyKey = ParseKey(keyStr);
-                    }
-                }
-                catch
-                {
-                    settings.HotkeyKey = Key.Space; // Use default on error
-                    settings.HotkeyKeyString = "Space";
-                }
+                // Main hotkey
+                string modStr = ParseString(hotkey, "modifier", "Alt");
+                settings.HotkeyModifierString = modStr;
+                settings.HotkeyModifier = ParseModifier(modStr);
+                
+                string keyStr = ParseString(hotkey, "key", "Space");
+                settings.HotkeyKeyString = keyStr;
+                settings.HotkeyKey = ParseKey(keyStr);
+                
+                // Toggle mode hotkey
+                string toggleModStr = ParseString(hotkey, "toggle_mode_modifier", "Alt+Shift");
+                settings.ToggleModeModifierString = toggleModStr;
+                settings.ToggleModeModifier = ParseModifier(toggleModStr);
+                
+                string toggleKeyStr = ParseString(hotkey, "toggle_mode_key", "M");
+                settings.ToggleModeKeyString = toggleKeyStr;
+                settings.ToggleModeKey = ParseKey(toggleKeyStr);
             }
 
             return settings;
@@ -174,21 +112,80 @@ key = ""Space""
         }
         catch (Exception ex)
         {
-            // Log the error or handle it as needed
             Console.WriteLine($"Failed to create default config: {ex.Message}");
         }
     }
 
+    private bool ParseBool(TomlTable table, string key, bool defaultValue)
+    {
+        try
+        {
+            if (table.TryGetValue(key, out var value))
+            {
+                return value switch
+                {
+                    bool b => b,
+                    string s => bool.Parse(s),
+                    long l => l != 0,
+                    _ => defaultValue
+                };
+            }
+        }
+        catch { }
+        return defaultValue;
+    }
+
+    private int ParseInt(TomlTable table, string key, int defaultValue)
+    {
+        try
+        {
+            if (table.TryGetValue(key, out var value))
+            {
+                return value switch
+                {
+                    int i => i,
+                    long l => (int)l,
+                    string s => int.Parse(s),
+                    _ => defaultValue
+                };
+            }
+        }
+        catch { }
+        return defaultValue;
+    }
+
+    private string ParseString(TomlTable table, string key, string defaultValue)
+    {
+        try
+        {
+            if (table.TryGetValue(key, out var value))
+            {
+                return value?.ToString() ?? defaultValue;
+            }
+        }
+        catch { }
+        return defaultValue;
+    }
+
     private ModifierKeys ParseModifier(string modifier)
     {
-        return modifier.ToLowerInvariant() switch
+        var parts = modifier.Split('+');
+        ModifierKeys result = ModifierKeys.None;
+        
+        foreach (var part in parts)
         {
-            "alt" => ModifierKeys.Alt,
-            "control" or "ctrl" => ModifierKeys.Control,
-            "shift" => ModifierKeys.Shift,
-            "windows" or "win" => ModifierKeys.Windows,
-            _ => ModifierKeys.Alt
-        };
+            var trimmed = part.Trim().ToLowerInvariant();
+            result |= trimmed switch
+            {
+                "alt" => ModifierKeys.Alt,
+                "control" or "ctrl" => ModifierKeys.Control,
+                "shift" => ModifierKeys.Shift,
+                "windows" or "win" => ModifierKeys.Windows,
+                _ => ModifierKeys.None
+            };
+        }
+        
+        return result == ModifierKeys.None ? ModifierKeys.Alt : result;
     }
 
     private Key ParseKey(string key)

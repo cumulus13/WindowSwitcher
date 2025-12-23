@@ -1,3 +1,9 @@
+// File: MainWindow.xaml.cs
+// Author: Hadi Cahyadi <cumulus13@gmail.com>
+// Date: 2025-12-23
+// Description: 
+// License: MIT
+
 using System;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
@@ -18,6 +24,9 @@ public partial class MainWindow : Window
     private ObservableCollection<WindowInfo> _allWindows;
     private ObservableCollection<WindowInfo> _filteredWindows;
     private AppSettings _settings = null!;
+    
+    // NEW: Track display mode
+    private bool _followCursorMode = true;
 
     public MainWindow()
     {
@@ -39,15 +48,25 @@ public partial class MainWindow : Window
         {
             // Load settings
             _settings = _configService.LoadSettings();
+            _followCursorMode = _settings.FollowCursor;
             
             // Apply theme
             ApplyTheme(_settings.DarkTheme);
             
-            // Register global hotkey
+            // Register main hotkey
             _hotkeyService.RegisterHotkey(
                 _settings.HotkeyModifier,
                 _settings.HotkeyKey,
-                () => Dispatcher.Invoke(ToggleWindow)
+                () => Dispatcher.Invoke(ToggleWindow),
+                hotkeyId: 9000
+            );
+            
+            // Register toggle mode hotkey
+            _hotkeyService.RegisterHotkey(
+                _settings.ToggleModeModifier,
+                _settings.ToggleModeKey,
+                () => Dispatcher.Invoke(ToggleDisplayMode),
+                hotkeyId: 9001
             );
             
             // Hide window after hotkey is registered
@@ -58,6 +77,59 @@ public partial class MainWindow : Window
             MessageBox.Show($"Failed to initialize: {ex.Message}", "Error", 
                 MessageBoxButton.OK, MessageBoxImage.Error);
         }
+    }
+
+    private void ToggleDisplayMode()
+    {
+        _followCursorMode = !_followCursorMode;
+        
+        string mode = _followCursorMode ? "Follow Cursor" : "Primary Monitor";
+        
+        // Show temporary notification window
+        var notif = new Window
+        {
+            Width = 300,
+            Height = 100,
+            WindowStyle = WindowStyle.None,
+            AllowsTransparency = true,
+            Background = System.Windows.Media.Brushes.Transparent,
+            ShowInTaskbar = false,
+            Topmost = true,
+            WindowStartupLocation = WindowStartupLocation.CenterScreen
+        };
+        
+        var border = new Border
+        {
+            Background = new SolidColorBrush(Color.FromArgb(230, 30, 30, 30)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0, 120, 212)),
+            BorderThickness = new Thickness(2),
+            CornerRadius = new CornerRadius(8),
+            Child = new TextBlock
+            {
+                Text = $"Display Mode: {mode}",
+                Foreground = System.Windows.Media.Brushes.White,
+                FontSize = 16,
+                FontWeight = FontWeights.SemiBold,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(20)
+            }
+        };
+        
+        notif.Content = border;
+        notif.Show();
+        
+        // Auto-close after 1.5 seconds
+        var timer = new System.Windows.Threading.DispatcherTimer
+        {
+            Interval = TimeSpan.FromSeconds(1.5)
+        };
+        timer.Tick += (s, args) =>
+        {
+            timer.Stop();
+            notif.Close();
+        };
+        timer.Start();
     }
 
     private void ToggleWindow()
@@ -80,6 +152,9 @@ public partial class MainWindow : Window
         // Clear search
         SearchBox.Clear();
         
+        // Position BEFORE showing
+        PositionWindowBeforeShow();
+        
         // Show and focus
         Show();
         Activate();
@@ -90,6 +165,32 @@ public partial class MainWindow : Window
         {
             ResultsList.SelectedIndex = 0;
         }
+    }
+
+    private void PositionWindowBeforeShow()
+    {
+        Rect workArea;
+        
+        if (_followCursorMode)
+        {
+            workArea = MonitorService.GetCursorMonitorWorkArea();
+        }
+        else
+        {
+            workArea = MonitorService.GetPrimaryMonitorWorkArea();
+        }
+        
+        // Get DPI scale
+        var dpiScale = VisualTreeHelper.GetDpi(this);
+        double scaleX = dpiScale.DpiScaleX;
+        double scaleY = dpiScale.DpiScaleY;
+        
+        // Calculate center position with DPI scaling
+        double windowWidth = this.Width * scaleX;
+        double windowHeight = this.Height * scaleY;
+        
+        this.Left = (workArea.Left + (workArea.Width - windowWidth) / 2) / scaleX;
+        this.Top = (workArea.Top + (workArea.Height - windowHeight) / 2) / scaleY;
     }
 
     private void HideWindow()
@@ -196,28 +297,6 @@ public partial class MainWindow : Window
                 break;
         }
     }
-
-    // private void ApplyTheme(bool isDark)
-    // {
-    //     if (isDark)
-    //     {
-    //         // Dark theme colors
-    //         var border = (System.Windows.Controls.Border)((System.Windows.Controls.Grid)Content).Parent;
-    //         border.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(30, 30, 30));
-    //         border.BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(60, 60, 60));
-            
-    //         var searchBorder = FindName("SearchBox") as System.Windows.Controls.TextBox;
-    //         if (searchBorder?.Parent is System.Windows.Controls.Border sb)
-    //         {
-    //             sb.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(40, 40, 40));
-    //             sb.BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(60, 60, 60));
-    //             searchBorder.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Colors.White);
-    //         }
-            
-    //         ResultsList.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(30, 30, 30));
-    //         ResultsList.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Colors.White);
-    //     }
-    // }
 
     private void ApplyTheme(bool isDark)
     {

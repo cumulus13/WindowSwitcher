@@ -69,6 +69,41 @@ internal static class NativeMethods
     [DllImport("kernel32.dll")]
     public static extern IntPtr GetModuleHandle(string lpModuleName);
 
+    // NEW: Multi-monitor API
+    [DllImport("user32.dll")]
+    public static extern bool GetCursorPos(out POINT lpPoint);
+    
+    [DllImport("user32.dll")]
+    public static extern IntPtr MonitorFromPoint(POINT pt, uint dwFlags);
+    
+    [DllImport("user32.dll")]
+    public static extern bool GetMonitorInfo(IntPtr hMonitor, ref MONITORINFO lpmi);
+    
+    [StructLayout(LayoutKind.Sequential)]
+    public struct POINT
+    {
+        public int X;
+        public int Y;
+    }
+    
+    [StructLayout(LayoutKind.Sequential)]
+    public struct RECT
+    {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+    }
+    
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
+    public struct MONITORINFO
+    {
+        public uint cbSize;
+        public RECT rcMonitor;
+        public RECT rcWork;
+        public uint dwFlags;
+    }
+
     // Constants
     public const int GWL_EXSTYLE = -20;
     public const int WS_EX_TOOLWINDOW = 0x00000080;
@@ -86,4 +121,8 @@ internal static class NativeMethods
     public const uint MOD_CONTROL = 0x0002;
     public const uint MOD_SHIFT = 0x0004;
     public const uint MOD_WIN = 0x0008;
+    
+    // NEW: Monitor constants
+    public const uint MONITOR_DEFAULTTONEAREST = 0x00000002;
+    public const uint MONITOR_DEFAULTTOPRIMARY = 0x00000001;
 }
