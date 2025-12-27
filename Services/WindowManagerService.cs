@@ -1,6 +1,10 @@
-// ============================================================================
-// FILE: Services/WindowManagerService.cs - LOG TO EXECUTABLE DIR
-// ============================================================================
+// File: Services\WindowManagerService.cs
+// Author: Hadi Cahyadi <cumulus13@gmail.com>
+// Date: 2025-12-27
+// Description: 
+// License: MIT
+
+
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -15,7 +19,7 @@ namespace WindowSwitcher.Services;
 
 public class WindowManagerService
 {
-    private bool _debugMode = false; // SET TRUE untuk debug
+    private bool _debugMode = false;
     private string _logFile = Path.Combine(
         Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? ".", 
         "WindowSwitcher_Debug.txt"
@@ -39,7 +43,6 @@ public class WindowManagerService
 
         if (_debugMode)
         {
-            // Clear old log
             try { File.Delete(_logFile); } catch { }
             Log("=== STARTING WINDOW ENUMERATION ===");
         }
@@ -48,25 +51,18 @@ public class WindowManagerService
         {
             try
             {
-                // Get window title FIRST
-                int length = NativeMethods.GetWindowTextLength(hWnd);
-                string windowTitle = "";
-                if (length > 0)
-                {
-                    var title = new StringBuilder(length + 1);
-                    NativeMethods.GetWindowText(hWnd, title, title.Capacity);
-                    windowTitle = title.ToString();
-                }
-
-                // Skip invisible windows
+                // STEP 1: Check if window is visible
                 if (!NativeMethods.IsWindowVisible(hWnd))
                 {
-                    if (_debugMode && !string.IsNullOrWhiteSpace(windowTitle))
-                        Log($"SKIP (invisible): {windowTitle}");
-                    return true;
+                    return true; // Skip invisible windows
                 }
 
-                // Skip empty titles
+                // STEP 2: Get window title
+                var windowText = new StringBuilder(256);
+                int length = NativeMethods.GetWindowText(hWnd, windowText, windowText.Capacity);
+                string windowTitle = windowText.ToString();
+
+                // Skip if no title
                 if (string.IsNullOrWhiteSpace(windowTitle))
                 {
                     if (_debugMode)
@@ -74,7 +70,7 @@ public class WindowManagerService
                     return true;
                 }
 
-                // Get process info
+                // STEP 3: Get process info
                 NativeMethods.GetWindowThreadProcessId(hWnd, out uint processId);
                 
                 // Skip our own process
@@ -91,9 +87,12 @@ public class WindowManagerService
                     var process = Process.GetProcessById((int)processId);
                     processName = process.ProcessName;
                 }
-                catch { }
+                catch
+                {
+                    // Process might have exited
+                }
 
-                // Get window styles
+                // STEP 4: Get window styles
                 int exStyle = NativeMethods.GetWindowLong(hWnd, NativeMethods.GWL_EXSTYLE);
                 IntPtr owner = NativeMethods.GetWindow(hWnd, NativeMethods.GW_OWNER);
                 
@@ -101,41 +100,61 @@ public class WindowManagerService
                 bool hasAppWindowStyle = (exStyle & NativeMethods.WS_EX_APPWINDOW) != 0;
                 bool hasOwner = owner != IntPtr.Zero;
 
-                // Log details
-                if (_debugMode)
-                {
-                    Log($"Window: {windowTitle} ({processName})");
-                    Log($"  ToolWindow={hasToolWindowStyle}, AppWindow={hasAppWindowStyle}, HasOwner={hasOwner}");
-                }
+                // if (_debugMode)
+                // {
+                //     Log($"Window: {windowTitle} ({processName})");
+                //     Log($"  ToolWindow={hasToolWindowStyle}, AppWindow={hasAppWindowStyle}, HasOwner={hasOwner}");
+                // }
 
-                // Filter logic
+                // STEP 5: Apply filtering (same logic as showme.cs - simpler!)
+                // Skip tool windows unless they have WS_EX_APPWINDOW
                 if (hasToolWindowStyle && !hasAppWindowStyle)
                 {
                     if (_debugMode)
-                        Log($"  -> SKIP (tool window without app style)");
+                        Log($"  -> SKIP (tool window)");
                     return true;
                 }
 
+                // Skip owned windows (dialogs) unless they have WS_EX_APPWINDOW
                 if (hasOwner && !hasAppWindowStyle)
                 {
                     if (_debugMode)
-                        Log($"  -> SKIP (has owner without app style)");
+                        Log($"  -> SKIP (owned window)");
                     return true;
                 }
 
                 if (_debugMode)
                     Log($"  -> INCLUDED ✓");
 
+                // STEP 6: Create WindowInfo
                 var windowInfo = new WindowInfo
                 {
                     Handle = hWnd,
                     Title = windowTitle,
-                    ProcessName = processName
+                    ProcessName = processName,
+                    ProcessId = processId
+
                 };
 
+                // STEP 7: Load icon with error handling
                 if (loadIcons)
                 {
-                    windowInfo.Icon = IconExtractor.ExtractIcon(hWnd, processId);
+                    try
+                    {
+                        windowInfo.Icon = IconExtractor.ExtractIcon(hWnd, processId);
+                    }
+                    catch (Exception ex)
+                    {
+                        if (_debugMode)
+                            Log($"  Icon extraction failed: {ex.Message}");
+                        // Continue without icon
+                    }
+                }
+
+                if (_debugMode)
+                {
+                    Log($"Window: {windowTitle} ({processName})");
+                    Log($"  ToolWindow={hasToolWindowStyle}, AppWindow={hasAppWindowStyle}, HasOwner={hasOwner}");
                 }
 
                 windows.Add(windowInfo);
@@ -143,18 +162,18 @@ public class WindowManagerService
             catch (Exception ex)
             {
                 if (_debugMode)
-                    Log($"ERROR: {ex.Message}");
+                    Log($"ERROR processing window: {ex.Message}");
             }
 
-            return true;
+            return true; // Continue enumeration
         }, IntPtr.Zero);
 
         if (_debugMode)
         {
             Log($"=== TOTAL WINDOWS: {windows.Count} ===");
-            Log($"Log file: {_logFile}");
         }
 
+        // Console.WriteLine($"[WindowManagerService] Retrieved {windows.Count} windows.");
         return windows;
     }
 
@@ -162,12 +181,166 @@ public class WindowManagerService
     {
         try
         {
+            // Restore if minimized
             if (NativeMethods.IsIconic(hWnd))
             {
                 NativeMethods.ShowWindow(hWnd, NativeMethods.SW_RESTORE);
             }
+            
+            // Bring to front
             NativeMethods.SetForegroundWindow(hWnd);
         }
-        catch { }
+        catch (Exception ex)
+        {
+            if (_debugMode)
+                Log($"BringWindowToFront ERROR: {ex.Message}");
+        }
     }
 }
+
+// public class WindowManagerService
+// {
+//     public List<WindowInfo> GetAllWindows(bool loadIcons)
+//     {
+//         var windows = new List<WindowInfo>();
+//         var currentProcess = Process.GetCurrentProcess().Id;
+
+//         NativeMethods.EnumWindows((hWnd, lParam) =>
+//         {
+//             // SIMPLE FILTER - Just like Program.cs!
+//             if (NativeMethods.IsWindowVisible(hWnd))
+//             {
+//                 // Get title
+//                 var windowText = new StringBuilder(256);
+//                 NativeMethods.GetWindowText(hWnd, windowText, windowText.Capacity);
+//                 string title = windowText.ToString();
+
+//                 // Skip empty titles
+//                 if (string.IsNullOrWhiteSpace(title))
+//                     return true;
+
+//                 // Get process
+//                 NativeMethods.GetWindowThreadProcessId(hWnd, out uint processId);
+                
+//                 // Skip self
+//                 if (processId == currentProcess)
+//                     return true;
+
+//                 string processName = "Unknown";
+//                 try
+//                 {
+//                     var process = Process.GetProcessById((int)processId);
+//                     processName = process.ProcessName;
+//                 }
+//                 catch { }
+
+//                 // Create window info
+//                 var windowInfo = new WindowInfo
+//                 {
+//                     Handle = hWnd,
+//                     Title = title,
+//                     ProcessName = processName
+//                 };
+
+//                 // Load icon ONLY if requested (THIS IS SLOW!)
+//                 if (loadIcons)
+//                 {
+//                     try
+//                     {
+//                         windowInfo.Icon = IconExtractor.ExtractIcon(hWnd, processId);
+//                     }
+//                     catch
+//                     {
+//                         // Ignore icon errors
+//                     }
+//                 }
+
+//                 windows.Add(windowInfo);
+//             }
+//             return true;
+//         }, IntPtr.Zero);
+
+//         return windows;
+//     }
+
+//     public void BringWindowToFront(IntPtr hWnd)
+//     {
+//         try
+//         {
+//             if (NativeMethods.IsIconic(hWnd))
+//             {
+//                 NativeMethods.ShowWindow(hWnd, NativeMethods.SW_RESTORE);
+//             }
+//             NativeMethods.SetForegroundWindow(hWnd);
+//         }
+//         catch { }
+//     }
+// }
+
+
+// public class WindowManagerService
+// {
+//     public List<WindowInfo> GetAllWindows(bool loadIcons)
+//     {
+//         var windows = new List<WindowInfo>();
+//         var currentProcessId = Process.GetCurrentProcess().Id;
+
+//         NativeMethods.EnumWindows((hWnd, lParam) =>
+//         {
+//             // EXACT COPY from Program.cs - NO CHANGES!
+//             if (NativeMethods.IsWindowVisible(hWnd))
+//             {
+//                 StringBuilder windowText = new StringBuilder(256);
+//                 NativeMethods.GetWindowText(hWnd, windowText, windowText.Capacity);
+//                 string title = windowText.ToString();
+
+//                 // Get process info
+//                 NativeMethods.GetWindowThreadProcessId(hWnd, out uint processId);
+                
+//                 string processName = "Unknown";
+//                 try
+//                 {
+//                     var process = Process.GetProcessById((int)processId);
+//                     processName = process.ProcessName;
+//                 }
+//                 catch { }
+
+//                 // Create window info
+//                 var windowInfo = new WindowInfo
+//                 {
+//                     Handle = hWnd,
+//                     Title = title,
+//                     ProcessName = processName
+//                 };
+
+//                 // Load icon (optional, makes it slow)
+//                 if (loadIcons)
+//                 {
+//                     try
+//                     {
+//                         windowInfo.Icon = IconExtractor.ExtractIcon(hWnd, processId);
+//                     }
+//                     catch { }
+//                 }
+
+//                 windows.Add(windowInfo);
+//             }
+//             return true; // Continue enumeration
+//         }, IntPtr.Zero);
+
+//         return windows;
+//     }
+
+//     public void BringWindowToFront(IntPtr hWnd)
+//     {
+//         try
+//         {
+//             if (NativeMethods.IsIconic(hWnd))
+//             {
+//                 NativeMethods.ShowWindow(hWnd, NativeMethods.SW_RESTORE);
+//             }
+//             NativeMethods.SetForegroundWindow(hWnd);
+//         }
+//         catch { }
+//     }
+// }

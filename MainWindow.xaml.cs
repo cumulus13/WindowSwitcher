@@ -5,6 +5,8 @@
 // License: MIT
 
 using System;
+using System.IO;
+using System.Reflection;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Windows;
@@ -12,21 +14,42 @@ using System.Windows.Input;
 using System.Windows.Media;
 using WindowSwitcher.Models;
 using WindowSwitcher.Services;
+// using WindowSwitcher.Helpers;
 using System.Windows.Controls;
+using System.Text.RegularExpressions;
+// using System.Threading.Tasks;
+// using System.Linq;
 
 namespace WindowSwitcher;
 
 public partial class MainWindow : Window
 {
+    private bool _debugMode = false;
+    private string _logFile = Path.Combine(
+        Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? ".", 
+        "WindowSwitcher_Debug.txt"
+    );
     private readonly WindowManagerService _windowManager;
+    // private readonly WindowCacheService _windowCache;
     private readonly ConfigService _configService;
     private readonly HotkeyService _hotkeyService;
     private ObservableCollection<WindowInfo> _allWindows;
     private ObservableCollection<WindowInfo> _filteredWindows;
     private AppSettings _settings = null!;
     
-    // NEW: Track display mode
+    // Track display mode
     private bool _followCursorMode = true;
+
+    private void Log(string message)
+    {
+        if (!_debugMode) return;
+        
+        try
+        {
+            File.AppendAllText(_logFile, $"{DateTime.Now:HH:mm:ss} - {message}\n");
+        }
+        catch { }
+    }
 
     public MainWindow()
     {
@@ -34,6 +57,14 @@ public partial class MainWindow : Window
         
         _windowManager = new WindowManagerService();
         _configService = new ConfigService();
+        _settings = _configService.LoadSettings();
+        
+        // _windowCache = new WindowCacheService(
+        //     _windowManager, 
+        //     _settings.CacheSeconds, 
+        //     _settings.AutoRefreshSeconds
+        // );
+
         _hotkeyService = new HotkeyService(this);
         
         _allWindows = new ObservableCollection<WindowInfo>();
@@ -145,9 +176,11 @@ public partial class MainWindow : Window
     }
 
     private void ShowWindow()
+    // private async void ShowWindow()
     {
         // Refresh window list
         RefreshWindows();
+        // await RefreshWindowsAsync();
         
         // Clear search
         SearchBox.Clear();
@@ -198,10 +231,98 @@ public partial class MainWindow : Window
         Hide();
     }
 
+    // private async Task LoadIconsAsync()
+    // {
+    //     // Take a snapshot of the CURRENT window list
+    //     var windows = _allWindows.ToList();
+
+    //     foreach (var window in windows)
+    //     {
+    //         // Skip if you already have an invalid icon or handle
+    //         if (window?.Handle == IntPtr.Zero || window?.Icon != null)
+    //             continue;
+
+    //         // Extract icon in THREAD POOL (not UI thread)
+    //         var icon = await Task.Run(() =>
+    //         {
+    //             try
+    //             {
+    //                 return IconExtractor.ExtractIcon(window.Handle, (uint)window.ProcessId);
+    //             }
+    //             catch
+    //             {
+    //                 return (ImageSource?)null;
+    //             }
+    //         });
+
+    //         // Now, since we are async method with await,
+    //         // context returns to UI thread → safe property update
+    //         if (window?.Icon != null) window.Icon = icon;
+        
+    //     }
+    // }
+
+    // private void RefreshWindows()
+    // {
+    //     _settings = _configService.LoadSettings();
+        
+    //     // Step 1: Get a list of windows WITHOUT icons — QUICK!
+    //     var windows = _windowManager.GetAllWindows(false); // <-- false = jangan load ikon
+
+    //     // Step 2: Clear the UI list
+    //     _allWindows.Clear();
+    //     _filteredWindows.Clear();
+
+    //     // Step 3: Fill the UI list with windows without icons
+    //     foreach (var window in windows)
+    //     {
+    //         _allWindows.Add(window);
+    //         _filteredWindows.Add(window);
+    //     }
+
+    //     // Step 4: IF settings ask to show icons, start loading icons Asynchronously & SAFELY
+    //     if (_settings.ShowIcons)
+    //     {
+    //         // Run in the background, but update the UI properly
+    //         Task.Run(() =>
+    //         {
+    //             foreach (var item in _allWindows.ToList()) // ToList() for secure snapshots
+    //             {
+    //                 if (item?.Handle == IntPtr.Zero)
+    //                     continue;
+
+    //                 ImageSource? icon = null;
+
+    //                 try
+    //                 {
+    //                     // Extract in background thread — only use values, don't touch the UI!
+    //                     icon = IconExtractor.ExtractIcon(item.Handle, (uint)item.ProcessId);
+    //                 }
+    //                 catch
+    //                 {
+    //                     // Ignore the error
+    //                 }
+
+    //                 // SEND UPDATES TO UI THREAD SECURELY
+    //                 Dispatcher.InvokeAsync(() =>
+    //                 {
+    //                     // Look for items that are still valid in the UI list
+    //                     var existing = _allWindows.FirstOrDefault(w => w.Handle == item.Handle);
+    //                     if (existing != null)
+    //                     {
+    //                         existing.Icon = icon; // INotifyPropertyChanged wajib!
+    //                     }
+    //                 }, System.Windows.Threading.DispatcherPriority.Background);
+    //             }
+    //         });
+    //     }
+    // }
+
     private void RefreshWindows()
     {
         _settings = _configService.LoadSettings();
         var windows = _windowManager.GetAllWindows(_settings.ShowIcons);
+        // var windows = _windowCache.GetWindows(false);
         
         _allWindows.Clear();
         _filteredWindows.Clear();
@@ -209,14 +330,42 @@ public partial class MainWindow : Window
         var count = 0;
         foreach (var window in windows)
         {
-            if (count >= _settings.MaxListShow)
-                break;
+            // if (count >= _settings.MaxListShow)
+            //     break;
                 
             _allWindows.Add(window);
             _filteredWindows.Add(window);
             count++;
         }
     }
+
+    // private void RefreshWindows()
+    // {
+    //     _settings = _configService.LoadSettings();
+        
+    //     // Load WITHOUT icons first (FAST!)
+    //     var windows = _windowManager.GetAllWindows(false);
+        
+    //     _allWindows.Clear();
+    //     _filteredWindows.Clear();
+        
+    //     foreach (var window in windows)
+    //     {
+    //         _allWindows.Add(window);
+    //         _filteredWindows.Add(window);
+    //     }
+        
+    //     // THEN load icons in background (OPTIONAL)
+    //     // if (_settings.ShowIcons)
+    //     // {
+    //     //     Task.Run(() => LoadIconsAsync());
+    //     // }
+
+    //     if (_settings.ShowIcons)
+    //     {
+    //         _ = LoadIconsAsync(); // Jalankan async, tapi aman
+    //     }
+    // }
 
     private void SearchBox_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
     {
@@ -236,28 +385,118 @@ public partial class MainWindow : Window
         }
     }
 
+    private static string ConvertWildcardToRegex(string pattern)
+    {
+        return "^" + Regex.Escape(pattern).Replace(@"\*", ".*") + "$";
+    }
+
+    // private void FilterWindows(string searchText)
+    // {
+    //     _filteredWindows.Clear();
+        
+    //     var query = searchText.ToLowerInvariant();
+    //     var count = 0;
+        
+    //     Console.WriteLine($"Filtering windows with query: {query}");
+    //     Console.WriteLine($"Total windows to filter: {_allWindows.Count}");
+        
+
+    //     foreach (var window in _allWindows)
+    //     {           
+    //         if (_debugMode)
+    //         {
+    //             Log($"Filter: {window.Title} ({window.ProcessName})");
+    //         }
+    //         // var title = window.Title ?? string.Empty;
+             
+    //         if (count >= _settings.MaxListShow){
+    //             Log($"break: {count}: {_settings.MaxListShow}");
+    //             break;
+    //         }
+                
+    //         // if (string.IsNullOrWhiteSpace(query) ||
+    //         //     window.Title.ToLowerInvariant().Contains(query) ||
+    //         //     window.ProcessName.ToLowerInvariant().Contains(query))
+    //         if (
+    //             // string.IsNullOrWhiteSpace(query) || 
+    //             window.Title.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0 ||
+    //             // window.ProcessName.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0 || 
+    //             Regex.IsMatch(window.Title, ConvertWildcardToRegex(searchText), RegexOptions.IgnoreCase) //|| 
+    //             // window.Title.ToLowerInvariant().Contains(query) || 
+    //             // window.ProcessName.ToLowerInvariant().Contains(query)
+    //             )
+
+    //         {
+    //             _filteredWindows.Add(window);
+    //             count++;
+    //         } else {
+    //             if (searchText.Contains('*')) 
+    //             {
+    //                 string regexPattern = ConvertWildcardToRegex(searchText);
+    //                 if (Regex.IsMatch(window.Title, regexPattern, RegexOptions.IgnoreCase))
+    //                 {
+    //                     _filteredWindows.Add(window);
+    //                     count++;
+    //                 }
+    //             }
+    //         }
+    //     }
+
+    //     if (_debugMode)
+    //     {
+    //         Console.WriteLine($"Filtered windows count: {_filteredWindows.Count}");
+    //         Log($"==== Filtered windows count: {_filteredWindows.Count} ==== ");
+
+    //         Console.WriteLine($"ResultsList.Items.Count: {ResultsList.Items.Count}");
+    //         Log($"==== ResultsList.Items.Count: {ResultsList.Items.Count} ==== ");
+    //     }
+
+    //     // Auto-select first item
+    //     if (ResultsList.Items.Count > 0)
+    //     {
+    //         ResultsList.SelectedIndex = 0;
+    //     }
+    // }
+
     private void FilterWindows(string searchText)
     {
         _filteredWindows.Clear();
         
-        var query = searchText.ToLowerInvariant();
+        var query = searchText.Trim();
         var count = 0;
         
         foreach (var window in _allWindows)
         {
             if (count >= _settings.MaxListShow)
                 break;
-                
-            if (string.IsNullOrWhiteSpace(query) ||
-                window.Title.ToLowerInvariant().Contains(query) ||
-                window.ProcessName.ToLowerInvariant().Contains(query))
+            
+            bool match = false;
+            
+            // Empty query = show all
+            if (string.IsNullOrWhiteSpace(query))
+            {
+                match = true;
+            }
+            // Wildcard pattern
+            else if (query.Contains('*'))
+            {
+                var regex = ConvertWildcardToRegex(query);
+                match = Regex.IsMatch(window.Title, regex, RegexOptions.IgnoreCase);
+            }
+            // Simple contains search
+            else
+            {
+                match = window.Title.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0 ||
+                        window.ProcessName.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0;
+            }
+            
+            if (match)
             {
                 _filteredWindows.Add(window);
                 count++;
             }
         }
         
-        // Auto-select first item
         if (ResultsList.Items.Count > 0)
         {
             ResultsList.SelectedIndex = 0;
@@ -339,9 +578,48 @@ public partial class MainWindow : Window
         HideWindow();
     }
 
+    // private async Task RefreshWindowsAsync()
+    // {
+    //     _settings = _configService.LoadSettings();
+        
+    //     // Use cache instead of direct call!
+    //     var windows = await _windowCache.GetWindowsAsync(_settings.ShowIcons);
+        
+    //     _allWindows.Clear();
+    //     _filteredWindows.Clear();
+        
+    //     foreach (var window in windows)
+    //     {
+    //         _allWindows.Add(window);
+    //         _filteredWindows.Add(window);
+    //     }
+    // }
+
+    // private async Task RefreshWindowsAsync()
+    // {
+    //     _settings = _configService.LoadSettings();
+        
+    //     // Get windows in background thread
+    //     var windows = await _windowCache.GetWindowsAsync(_settings.ShowIcons);
+        
+    //     // Update UI on UI thread!
+    //     await Dispatcher.InvokeAsync(() =>
+    //     {
+    //         _allWindows.Clear();
+    //         _filteredWindows.Clear();
+            
+    //         foreach (var window in windows)
+    //         {
+    //             _allWindows.Add(window);
+    //             _filteredWindows.Add(window);
+    //         }
+    //     });
+    // }
+
     protected override void OnClosing(CancelEventArgs e)
     {
         _hotkeyService.Dispose();
+        // _windowCache.Dispose();
         base.OnClosing(e);
     }
 }

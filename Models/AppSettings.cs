@@ -12,10 +12,14 @@ public class AppSettings
     public string HotkeyKeyString { get; set; } = "Space";
     public bool DarkTheme { get; set; } = false;
     
-    // NEW: Multi-monitor settings
+    // Multi-monitor settings
     public bool FollowCursor { get; set; } = true;
     public ModifierKeys ToggleModeModifier { get; set; } = ModifierKeys.Alt | ModifierKeys.Shift;
     public Key ToggleModeKey { get; set; } = Key.M;
     public string ToggleModeModifierString { get; set; } = "Alt+Shift";
     public string ToggleModeKeyString { get; set; } = "M";
+
+    // Cache settings
+    public int CacheSeconds { get; set; } = 5;
+    public int AutoRefreshSeconds { get; set; } = 30;
 }

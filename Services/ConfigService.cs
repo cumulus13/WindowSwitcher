@@ -25,6 +25,13 @@ dark_theme = true
 # Follow cursor to monitor (true) or always use primary monitor (false)
 follow_cursor = true
 
+[cache]
+# Cache window list for N seconds (avoid re-scanning)
+cache_seconds = 5
+
+# Auto-refresh cache every N seconds (0 = disabled)
+auto_refresh_seconds = 30
+
 [hotkey]
 # Main hotkey to show/hide window switcher
 modifier = ""Alt""
@@ -88,9 +95,15 @@ toggle_mode_key = ""M""
                 settings.ToggleModeKey = ParseKey(toggleKeyStr);
             }
 
+            if (model.TryGetValue("cache", out var cacheObj) && cacheObj is TomlTable cache)
+            {
+                settings.CacheSeconds = ParseInt(cache, "cache_seconds", 5);
+                settings.AutoRefreshSeconds = ParseInt(cache, "auto_refresh_seconds", 30);
+            }
+
             return settings;
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             // If config is corrupted, recreate it
             try
