@@ -88,6 +88,7 @@ jobs:
             ./WindowSwitcher-SingleFile-win-x64.zip
             ./WindowSwitcher-FrameworkDependent-win-x64.zip
             ./WindowSwitcher-Setup-*.exe
+            ./WindowSwitcher-Setup.exe
           generate_release_notes: true
           body: |
             ## 📦 Download Options
